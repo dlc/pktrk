@@ -70,7 +70,7 @@ Hacky bits / Future Directions / TODO
 =====================================
 
   * Right now, `boxoh` works completely using the public-facing web site, and
-    not the API.  I'm going to soon investigate using the [boxoh API][api] and
+    not the API.  I'm going to soon investigate using the [boxoh API](http://boxoh.com/api/docs/) and
     see if it provides any additional functionality.
 
   * There are no configurable parts.  Configurability will most likely happen
@@ -78,6 +78,3 @@ Hacky bits / Future Directions / TODO
 
   * How `boxoh` finds its database is pretty weak, and pretty much always ends
     up being in `~/.boxoh.db` for the current user.
-
-
-    [api]: http://boxoh.com/api/docs/
