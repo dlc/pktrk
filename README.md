@@ -50,3 +50,34 @@ Stop tracking a package
     $ boxoh remove 12341234123412341234
 
 Both forms work.
+
+Generating a Feed
+-----------------
+
+First, ensure that the database is up-to-date:
+
+    $ boxoh update-feeds
+
+`update-feeds` contacts boxoh.com for each tracked package and gets the latest updates.
+
+Then generate the new, aggregated feed:
+
+    $ boxoh feed > /src/www/htdocs/packages.xml
+
+The generated feed will be RSS 2.0, and is completely unconfigurable.
+
+Hacky bits / Future Directions / TODO
+=====================================
+
+  * Right now, `boxoh` works completely using the public-facing web site, and
+    not the API.  I'm going to soon investigate using the [boxoh API][api] and
+    see if it provides any additional functionality.
+
+  * There are no configurable parts.  Configurability will most likely happen
+    through a config file in `/etc/boxoh` or a similar place.
+
+  * How `boxoh` finds its database is pretty weak, and pretty much always ends
+    up being in `~/.boxoh.db` for the current user.
+
+
+    [api]: http://boxoh.com/api/docs/
