@@ -1,0 +1,464 @@
+#!/usr/bin/perl -wl
+
+# ----------------------------------------------------------------------
+# boxoh -- Command-line interface to boxoh.com
+# Run `boxoh help` to see full usage info
+# ----------------------------------------------------------------------
+
+use strict;
+use vars qw($ME $DIR %HANDLERS $DB_PATH);
+
+use DBI;
+use DBD::SQLite;
+use File::Basename qw(basename dirname);
+use HTML::Entities qw(decode_entities);
+use LWP::Simple qw(get);
+use POSIX qw(strftime);
+use Time::ParseDate qw(parsedate);
+use URI;
+use XML::RSS;
+
+use constant BOXOH => "http://boxoh.com/";
+
+my $cmd = shift || 'help';
+my $sub = $HANDLERS{$cmd} || $HANDLERS{'default'};
+
+$sub->(Boxoh::Db->instance($DB_PATH), @ARGV);
+
+exit 0;
+
+BEGIN {
+    $ME = basename($0);
+
+    # Find the db
+    my $dir = dirname($0);
+    my @paths = ("$dir/.$ME.db", "/etc/$ME.db", glob "~/.$ME.db");
+
+    for my $p (@paths) {
+        if (-e $p) {
+            $DB_PATH = $p;
+            last;
+        }
+    }
+    $DB_PATH ||= $paths[-1];
+
+    # Set up handlers
+    %HANDLERS = (
+
+        # Track a new package
+        track => sub {
+            my $db = shift;
+            for my $t (@_) {
+                if ($db->has($t)) {
+                    print "Skipping $t; already exists in database";
+                    next;
+                }
+
+                print "Storing package data for $t";
+                my ($u, $data, $link, $attrs);
+
+                # Register package with boxoh
+                $u = URI->new(BOXOH);
+                $u->query_form(t => $t);
+                $data = get($u->canonical);
+                ($link) = $data =~ m!(<link .+?$t.+?/>)!;
+                $attrs = parse_link($link);
+                $attrs->{'uri'} = $u;
+                $attrs->{'tnum'} = $t;
+
+                $db->save($attrs);
+
+                # Fetch feed
+                if ($attrs->{'href'}) {
+                    print "Storing event data for $t";
+                    update_feed($db, $attrs);
+                }
+            }
+        },
+
+        # Update each feed
+        'update-feeds' => sub {
+            my $db = shift;
+            my $to_update = $db->all('package', 'status != "Delivered"');
+            for my $f (@$to_update) {
+                print "Updating event stream for $f->{'tnum'}";
+                update_feed($db, $f);
+            }
+        },
+
+        # emit a combined rss feed
+        feed => sub {
+            my $db = shift;
+            my $feed = XML::RSS->new(version => "2.0");
+            $feed->channel(
+                title           => "Combined Package Tracking Feed, via Boxoh.com",
+                link            => "http://boxoh.com/",
+                lastBuildDate   => strftime("%Y-%m-%dT%H:%M:%S %Z", localtime),
+            );
+            my $events = $db->latest();
+            for my $e (@$events) {
+                $feed->add_item(
+                    title       => "$e->{'tnum'}: $e->{'title'}",
+                    link        => $e->{'link'},
+                    guid        => $e->{'guid'},
+                    pubDate     => strftime("%Y-%m-%dT%H:%M:%S %Z", localtime $e->{'date'}),
+                    description => $e->{'body'},
+                );
+            }
+            print $feed->as_string;
+        },
+
+        # List all packages
+        list => sub {
+            my $db = shift;
+            my $items = $db->all('package');
+            for my $i (@$items) {
+                printf "% 3d. %s <%s>\n",
+                    $i->{'id'}, $i->{'title'}, $i->{'link'};
+            }
+        },
+
+        # Manually remove pacakges
+        remove => sub {
+            my $db = shift;
+            for my $i (@_) {
+                $db->remove($i);
+                print "Removed item $i";
+            }
+        },
+
+        # Display info on a package
+        info => sub {
+            my $db = shift;
+            if (0 == @_) {
+                $HANDLERS{'list'}->($db);
+            }
+            else {
+                for (my $i = 0; $i < @_; $i ++) {
+                    my $info = $db->info($_[$i]);
+                    print $info->{'title'};
+                    print "-" x length($info->{'title'});
+                    print "Tracking Number: ", $info->{'tnum'};
+                    print "Carrier: ", $info->{'carrier'};
+                    print "Status: ", $info->{'status'};
+                    print "Link: ", $info->{'link'};
+                    print "";
+                    print "Package history";
+                    print "---------------";
+
+                    for my $e (@{ $info->{'events'} }) {
+                        print strftime("%Y/%m/%d %H:%M", localtime($e->{'date'})), ": ", $e->{'title'};
+                    }
+                }
+            }
+        },
+
+        # Remove all data for packages marked as delivered
+        'pack' => sub {
+            my $db = shift;
+            my $to_delete = $db->all('package', 'status = "Delivered"');
+            $HANDLERS{'remove'}->($db, map { $_->{'id'} } @$to_delete);
+        },
+
+        help => sub {
+            print <<HELP;
+$ME - Command-line interface to boxoh.com.
+
+Usage:
+
+    \$ $ME CMD [ARGS]
+
+Where CMD is one of:
+
+    track
+        Add one or more items to the list of packages being tracked.
+        Pass one or more package IDs to the command.
+
+    update-feeds
+        Grab and parse the RSS feeds for each tracked package.  This
+        should be run from cron.
+
+    feed
+        Generate a new RSS feed containing aggregated info from all
+        followed packages.  Note that this includes delivered packages;
+        use pack to remove delivered packages.
+
+        $ME feed emits the feed to stdout, and should be run periodically
+        to generate an RSS 2.0 feed, like:
+
+            30 * * * boxoh feed > /src/www/htdocs/packages.rss
+
+    list
+        Lists tracked packages to stdout, for manipulation.
+
+    remove
+        Remove an individual package from the db.  Packages can be removed
+        using their id (from $ME list) or package id.
+
+    info
+        Display info on a specific package.  Package info can be displayed
+        using their id (from $ME list) or package id.
+
+    pack
+        Removes all packages marked as 'Delivered'.  This is to
+        unclutter your feed.
+
+HELP
+        }
+    );
+    $HANDLERS{'default'} = $HANDLERS{'help'};
+
+    sub parse_link {
+        my $line = shift;
+        my %attrs;
+        $line =~ s/^<link *//;
+        while ($line =~ s/^(\S+)\s*=\s*(['"])(.*?)\2 *//) {
+            $attrs{"$1"} = $3;
+        }
+        ($attrs{'carrier'}) = $attrs{'title'} =~ /^(\S+)/;
+        $attrs{'href'} =~ s/&amp;/&/g;
+
+        return \%attrs;
+    }
+
+    sub update_feed {
+        my $db = shift;
+        my $attrs = shift;
+        my ($u, $data);
+
+        $u = URI->new($attrs->{'href'} || $attrs->{'feed'});
+        if ($data = get($u->canonical)) {
+            my (@items) = $data =~ m!<item>(.+?)</item>!gs;
+            for my $item (@items) {
+                my %fattr;
+                for my $i (qw(title description link pubDate guid id)) {
+                    ($fattr{$i}) = $item =~ m!<$i>(.*?)</$i>!s;
+                }
+                $fattr{'date'} = parsedate($fattr{'pubDate'});
+                $fattr{'title'} =~ s/.+: *//;
+                $fattr{'guid'} = $fattr{'guid'} || $fattr{'id'} || $fattr{'link'};
+                $fattr{'description'} = decode_entities($fattr{'description'});
+
+                $db->save_feed_item($attrs, \%fattr);
+                print " * $fattr{'title'}";
+            }
+        }
+
+        $db->update_status($attrs->{'tnum'});
+    }
+}
+
+package Boxoh::Db;
+use base qw(DBI::db);
+
+{
+    my $_db;
+    sub instance {
+        my $class = shift;
+        my $path = shift;
+        unless ($_db) {
+            my $exists = -e $path;
+            $_db = DBI->connect("dbi:SQLite:dbname=$path")
+                or die "Can't connect: " . DBI->errstr;
+
+            if (! $exists) {
+                for my $c (CREATE()) {
+                    $_db->do($c) or die "Error running sql '$c': " . $_db->errstr;
+                }
+            }
+
+            bless $_db => $class;
+        }
+
+        return $_db;
+    }
+}
+
+# ------------------------------------------------------------------
+# $db->has($TRACKING_NUM)
+#
+# Determine if a package exists in the db
+# ------------------------------------------------------------------
+sub has {
+    my $self = shift;
+    my $tnum = shift;
+    my $id = $self->pkg_id($tnum);
+
+    return $self->selectrow_array("SELECT COUNT(*) FROM package WHERE id = ?", undef, $id);
+}
+
+# ------------------------------------------------------------------
+# $db->save(\%pkg)
+#
+# Save info about a package.
+# ------------------------------------------------------------------
+sub save {
+    my $self = shift;
+    my $a = shift;
+    $self->do("INSERT INTO package (tnum, title, date, link, feed, carrier) VALUES (?, ?, ?, ?, ?, ?)",
+        undef, $a->{'tnum'}, $a->{'title'}, time, $a->{'uri'}, $a->{'href'}, $a->{'carrier'});
+}
+
+# ------------------------------------------------------------------
+# $db->save_feed_item(\%pkg, \%feed)
+#
+# Saves a feed event.
+# ------------------------------------------------------------------
+sub save_feed_item {
+    my $self = shift;
+    my $p = shift;
+    my $i = shift;
+
+    if (my $id = $self->pkg_id($p->{'tnum'})) {
+        $self->do("DELETE FROM event WHERE guid = ?", undef, $i->{'guid'});
+        $self->do("INSERT INTO event (pid, title, date, link, guid, body) VALUES (?, ?, ?, ?, ?, ?)",
+            undef, $id, $i->{'title'}, $i->{'date'}, $i->{'link'}, $i->{'guid'}, $i->{'description'});
+    }
+}
+
+# ------------------------------------------------------------------
+# $db->latest([$num])
+#
+# Returns the latest $num items
+# ------------------------------------------------------------------
+sub latest {
+    my $self = shift;
+    my $num = shift || '';
+    my @events;
+
+    my $sql = "
+        SELECT p.tnum, e.guid, e.title, e.date, e.link, e.body
+          FROM package p, event e
+         WHERE p.id = e.pid
+         ORDER BY e.date DESC";
+    if ($num) { $sql .= "LIMIT $num"; }
+
+    my $sth = $self->prepare($sql);
+    $sth->execute;
+    while (my $e = $sth->fetchrow_hashref) {
+        push @events, $e;
+    }
+    $sth->finish;
+
+    return \@events;
+}
+
+# ------------------------------------------------------------------
+# $db->pkg_id($TRACKING_NUM)
+#
+# Returns the db id of $TRACKING_NUM.  If $TRACKING_NUM is already
+# an id, then return that.  Otherwise, return undef.
+# ------------------------------------------------------------------
+sub pkg_id {
+    my $self = shift;
+    my $tnum = shift;
+    my $id;
+
+    if ($id = $self->selectrow_array("SELECT id FROM package WHERE id = ?", undef, $tnum)) {
+        return $id;
+    }
+
+    if ($id = $self->selectrow_array("SELECT id FROM package WHERE tnum = ?", undef, $tnum)) {
+        return $id;
+    }
+
+    return;
+}
+
+# ------------------------------------------------------------------
+# $db->update_status($TRACKING_NUM)
+#
+# Upates the package table with the latest info from the event table
+# ------------------------------------------------------------------
+sub update_status {
+    my $self = shift;
+    my $tnum = shift;
+
+    if (my $id = $self->pkg_id($tnum)) {
+        $self->do("
+            UPDATE package
+               SET status = (SELECT title FROM event WHERE pid = ? ORDER BY date DESC LIMIT 1)
+             WHERE id = ?", undef, $id, $id);
+    }
+}
+
+# ------------------------------------------------------------------
+# $db->all()
+#
+# Return every package in the db as an arrayref of hashrefs
+# ------------------------------------------------------------------
+sub all {
+    my $self = shift;
+    my $table = shift;
+    my $where = shift || '1 = 1';
+    my $order = shift || 'id ASC';
+    my @items;
+
+    my $sth = $self->prepare("
+        SELECT *
+          FROM $table
+         WHERE $where
+         ORDER BY $order");
+
+    $sth->execute;
+    while (my $r = $sth->fetchrow_hashref) {
+        push @items, $r;
+    }
+    $sth->finish;
+
+    return \@items;
+}
+
+# ------------------------------------------------------------------
+# $db->remove($TRACKING_NUM)
+# Remove a package from the db
+# ------------------------------------------------------------------
+sub remove {
+    my $self = shift;
+    my $i = shift;
+    if (my $id = $self->pkg_id($i)) {
+        $self->do("DELETE FROM package WHERE id = ?", undef, $id);
+        $self->do("DELETE FROM event WHERE pid = ?", undef, $id);
+    }
+}
+
+# ------------------------------------------------------------------
+# $db->info($TRACKING_NUM)
+#
+# Return info on $TRACKING_NUM
+# ------------------------------------------------------------------
+sub info {
+    my $self = shift;
+    my $tnum = shift;
+    my %info;
+
+    if (my $id = $self->pkg_id($tnum)) {
+        my $sth = $self->prepare("
+                SELECT *
+                  FROM package
+                 WHERE id = ?");
+        $sth->execute($id);
+        %info = (%{ $sth->fetchrow_hashref });
+        $sth->finish;
+
+        $info{'events'} = $self->all(
+            'event',
+            "pid = $id",
+            "date ASC");
+    }
+
+    return \%info;
+}
+
+# ------------------------------------------------------------------
+# $db->CREATE()
+#
+# Return the schema, for creating the db.
+# Note that this assumes SQLite, for now.
+# ------------------------------------------------------------------
+sub CREATE {
+    return (
+        q~CREATE TABLE package (id INTEGER PRIMARY KEY, tnum, title, date INTEGER, link, feed, status, carrier)~,
+        q~CREATE TABLE event (id INTEGER PRIMARY KEY, pid INTEGER, guid, title, date INTEGER, link, body)~,
+    );
+}
