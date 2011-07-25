@@ -48,7 +48,19 @@ BEGIN {
         # Track a new package
         track => sub {
             my $db = shift;
-            for my $t (@_) {
+
+            for (my $i = 0; $i <= @_; $i++) {
+                my $t = $_[$i];
+                my $pname = "";
+
+                next unless $t;
+
+                # Check for package title; track 1234 as "new book"
+                if (lc($_[ $i+1 ]) eq 'as') {
+                    $pname = $_[ $i+2 ];
+                    $i += 2;
+                }
+
                 if ($db->has($t)) {
                     print "Skipping $t; already exists in database";
                     next;
@@ -65,6 +77,7 @@ BEGIN {
                 $attrs = parse_link($link);
                 $attrs->{'uri'} = $u;
                 $attrs->{'tnum'} = $t;
+                $attrs->{'title'} = $pname if $pname;
 
                 $db->save($attrs);
 
@@ -172,7 +185,16 @@ Where CMD is one of:
 
     track
         Add one or more items to the list of packages being tracked.
-        Pass one or more package IDs to the command.
+        Pass one or more package IDs to the command.  The title of the
+        tracked package defaults to boxoh's name ("\$CARRIER tracking
+        information for \$TRACKING_NUMBER") but you can specify your
+        own title by declaring the package thusly:
+
+          \$ $ME track 123456789 as "Bday gift for Susan"
+
+        Then, package 123456789 will always be displyed as "Bday
+        gift for Susan".  Keep in mind that there is no editing
+        feature yet.
 
     update-feeds
         Grab and parse the RSS feeds for each tracked package.  This
