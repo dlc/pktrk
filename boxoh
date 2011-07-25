@@ -111,7 +111,7 @@ BEGIN {
             my $events = $db->latest();
             for my $e (@$events) {
                 $feed->add_item(
-                    title       => "$e->{'tnum'}: $e->{'title'}",
+                    title       => "$e->{'tnum'}: '$e->{'p_title'}': $e->{'title'}",
                     link        => $e->{'link'},
                     guid        => $e->{'guid'},
                     pubDate     => strftime("%Y-%m-%dT%H:%M:%S %Z", localtime $e->{'date'}),
@@ -349,7 +349,7 @@ sub latest {
     my @events;
 
     my $sql = "
-        SELECT p.tnum, e.guid, e.title, e.date, e.link, e.body
+        SELECT p.tnum, p.title as p_title, e.guid, e.title, e.date, e.link, e.body
           FROM package p, event e
          WHERE p.id = e.pid
          ORDER BY e.date DESC";
