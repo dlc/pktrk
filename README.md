@@ -19,6 +19,10 @@ Start tracking a package
 
     $ boxoh track 12341234123412341234
 
+The title of the tracked package defaults to "$CARRIER tracking formation for $NUMBER", but you can give a tracked package an explicit name thusly:
+
+    $ boxoh track 12341234123412341234 as "Bday gift for Susan"
+
 Listing tracked packages
 ------------------------
 
