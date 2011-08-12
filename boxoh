@@ -32,7 +32,8 @@ BEGIN {
 
     # Find the db
     my $dir = dirname($0);
-    my @paths = ("$dir/.$ME.db", "/etc/$ME.db", glob "~/.$ME.db");
+    my @paths = ("./.$ME.db", glob "~/.$ME.db");
+    push @paths, "/etc/$ME.db" if $< == 0;
 
     for my $p (@paths) {
         if (-e $p) {
@@ -173,6 +174,12 @@ BEGIN {
             $HANDLERS{'remove'}->($db, map { $_->{'id'} } @$to_delete);
         },
 
+        # Print path the the db
+        finddb => sub {
+            my $db = shift;
+            print $DB_PATH;
+        },
+
         help => sub {
             print <<HELP;
 $ME - Command-line interface to boxoh.com.
@@ -224,6 +231,9 @@ Where CMD is one of:
     pack
         Removes all packages marked as 'Delivered'.  This is to
         unclutter your feed.
+
+    finddb
+        Prints the path to the db file.
 
 HELP
         }
