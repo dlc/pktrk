@@ -67,7 +67,6 @@ BEGIN {
                     next;
                 }
 
-                print "Storing package data for $t";
                 my ($u, $data, $link, $attrs);
 
                 # Register package with boxoh
@@ -80,12 +79,18 @@ BEGIN {
                 $attrs->{'tnum'} = $t;
                 $attrs->{'title'} = $pname if $pname;
 
-                $db->save($attrs);
+                if ($attrs->{'href'} && $attrs->{'carrier'}) {
+                    print "Storing package data for $t";
+                    $db->save($attrs);
 
-                # Fetch feed
-                if ($attrs->{'href'}) {
-                    print "Storing event data for $t";
-                    update_feed($db, $attrs);
+                    # Fetch feed
+                    if ($attrs->{'href'}) {
+                        print "Storing event data for $t";
+                        update_feed($db, $attrs);
+                    }
+                }
+                else {
+                    print "Boxoh can't handle `$t'; sorry.";
                 }
             }
         },
@@ -241,14 +246,15 @@ HELP
     $HANDLERS{'default'} = $HANDLERS{'help'};
 
     sub parse_link {
-        my $line = shift;
         my %attrs;
-        $line =~ s/^<link *//;
-        while ($line =~ s/^(\S+)\s*=\s*(['"])(.*?)\2 *//) {
-            $attrs{"$1"} = $3;
+        if (my $line = shift) {
+            $line =~ s/^<link *//;
+            while ($line =~ s/^(\S+)\s*=\s*(['"])(.*?)\2 *//) {
+                $attrs{"$1"} = $3;
+            }
+            ($attrs{'carrier'}) = ($attrs{'title'} || '') =~ /^(\S+)/;
+            ($attrs{'href'} ||= '') =~ s/&amp;/&/g;
         }
-        ($attrs{'carrier'}) = $attrs{'title'} =~ /^(\S+)/;
-        $attrs{'href'} =~ s/&amp;/&/g;
 
         return \%attrs;
     }
