@@ -141,8 +141,9 @@ BEGIN {
         remove => sub {
             my $db = shift;
             for my $i (@_) {
+                my $info = $db->info($i);
                 $db->remove($i);
-                print "Removed item $i";
+                print "Removed item $i: $info->{'title'}";
             }
         },
 
@@ -264,7 +265,7 @@ Where CMD is one of:
 HELP
         }
     );
-    $HANDLERS{'update}'} = $HANDLERS{'update-feeds'};
+    $HANDLERS{'update'} = $HANDLERS{'update-feeds'};
     $HANDLERS{'default'} = $HANDLERS{'help'};
 
     sub parse_link {
