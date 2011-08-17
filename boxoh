@@ -146,6 +146,18 @@ BEGIN {
             }
         },
 
+        # Rename an item
+        'rename' => sub {
+            my $db = shift;
+            my $tnum = shift;
+            my $name = shift;
+            $name = shift
+                if ($name eq 'to' or $name = 'as');
+            my $res = $db->change_name($tnum, $name);
+            print "Error renaming item $tnum: $res"
+                if $res;
+        },
+
         # Display info on a package
         info => sub {
             my $db = shift;
@@ -225,6 +237,15 @@ Where CMD is one of:
     list
         Lists tracked packages to stdout, for manipulation.
 
+    rename
+        Renames a tracked package:
+
+            \$ $ME list
+            57. USPS Package <http://boxoh.com/?t=123456789>
+            \$ $ME rename 123456789 to "Incoming: 'My Life As A Pencil'"
+            \$ $ME list
+            57. Incoming: 'My Life As A Pencil' <http://boxoh.com/?t=123456789>
+
     remove
         Remove an individual package from the db.  Packages can be removed
         using their id (from $ME list) or package id.
@@ -243,6 +264,7 @@ Where CMD is one of:
 HELP
         }
     );
+    $HANDLERS{'update}'} = $HANDLERS{'update-feeds'};
     $HANDLERS{'default'} = $HANDLERS{'help'};
 
     sub parse_link {
@@ -486,6 +508,34 @@ sub info {
     }
 
     return \%info;
+}
+
+# ------------------------------------------------------------------
+# $db->change_name($ID, $NAME)
+#
+# Changes the name of $ID to $NAME
+# ------------------------------------------------------------------
+sub change_name {
+    my $self = shift;
+    my $tnum = shift;
+    my $name = shift;
+    my $err;
+
+    if (my $id = $self->pkg_id($tnum)) {
+        my $sth = $self->prepare("UPDATE package SET title = ? WHERE id = ?");
+
+        if ($sth->execute($name, $id)) {
+            $sth->finish;
+        }
+        else {
+            $err = $sth->errstr;
+        }
+    }
+    else {
+        $err = "Can't find package '$tnum'";
+    }
+
+    return $err;
 }
 
 # ------------------------------------------------------------------
