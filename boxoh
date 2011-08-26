@@ -132,8 +132,17 @@ BEGIN {
             my $db = shift;
             my $items = $db->all('package');
             for my $i (@$items) {
-                printf "% 3d. %s <%s>\n",
+                my $info = $db->info($i->{'id'});
+                printf "% 3d. %s <%s>",
                     $i->{'id'}, $i->{'title'}, $i->{'link'};
+
+                my $d = @{ $info->{'events'} } ? $info->{'events'}->[-1] : {};
+                if ($d->{'title'} eq 'Delivered') {
+                    printf " -- Delivered %s",
+                        strftime "%Y-%m-%d %H:%M", localtime($d->{'date'});
+                }
+
+                print "";
             }
         },
 
