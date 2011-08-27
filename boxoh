@@ -130,7 +130,7 @@ BEGIN {
         # List all packages
         list => sub {
             my $db = shift;
-            my $items = $db->all('package');
+            my $items = $db->all('package', '', 'date DESC');
             for my $i (@$items) {
                 my $info = $db->info($i->{'id'});
                 printf "% 3d. %s <%s>",
