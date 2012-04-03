@@ -146,6 +146,17 @@ BEGIN {
             }
         },
 
+        # Warning: this is ugly
+        'out-for-delivery' => sub {
+            my $db = shift;
+            my $items = $db->all('package', "id IN (SELECT pid FROM event WHERE title = 'Out For Delivery' AND pid NOT IN (SELECT pid FROM event WHERE title = 'Delivered'))");
+            for my $i (@$items) {
+                my $info = $db->info($i->{'id'});
+                printf "% 3d. %s <%s>\n",
+                    $i->{'id'}, $i->{'title'}, $i->{'link'};
+            }
+        },
+
         # Manually remove pacakges
         remove => sub {
             my $db = shift;
@@ -263,6 +274,10 @@ Where CMD is one of:
     info
         Display info on a specific package.  Package info can be displayed
         using their id (from $ME list) or package id.
+
+    out-for-delivery
+        Prints a list of items that are currently out for delivery.
+        The heuristic used is sketchy, so you shouldn't rely on it.
 
     pack
         Removes all packages marked as 'Delivered'.  This is to

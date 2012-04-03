@@ -4,7 +4,7 @@ use strict;
 
 WriteMakefile(
     NAME        => "boxoh",
-    VERSION     => "1.00",
+    VERSION     => "1.01",
     PREREQ_PM   => {
         'DBI'               => undef,
         'DBD::SQLite'       => undef,

@@ -70,6 +70,13 @@ Then generate the new, aggregated feed:
 
 The generated feed will be RSS 2.0, and is completely unconfigurable.
 
+Seeing What's Out For Delivery
+------------------------------
+
+Use the `out-for-delivery` command to make `boxoh` try to determine
+what's currently out for delivery. Note that this is pretty sketchy,
+and shouldn't be relied on for anything real.
+
 Hacky bits / Future Directions / TODO
 =====================================
 
