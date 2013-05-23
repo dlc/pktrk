@@ -289,8 +289,16 @@ Where CMD is one of:
 HELP
         }
     );
-    $HANDLERS{'update'} = $HANDLERS{'update-feeds'};
-    $HANDLERS{'default'} = $HANDLERS{'help'};
+
+    $HANDLERS{'default'}    = $HANDLERS{'help'};
+
+    # Aliases for other commands
+    $HANDLERS{'add'}        = $HANDLERS{'track'};
+    $HANDLERS{'del'}        = $HANDLERS{'remove'};
+    $HANDLERS{'rm'}         = $HANDLERS{'remove'};
+    $HANDLERS{'out'}        = $HANDLERS{'out-for-delivery'};
+    $HANDLERS{'show'}       = $HANDLERS{'info'};
+    $HANDLERS{'update'}     = $HANDLERS{'update-feeds'};
 
     sub parse_link {
         my %attrs;
