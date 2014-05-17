@@ -39,23 +39,16 @@ changes, reserializes the structure to json in an END block.
 
 Schema looks something like this:
 
-    {
-        "packages": [
+    { "packages": [
             {
-                "tracked_via": "One of boxoh, lasership, others", 
-                "events": [
-                    [
-                        "timstamp", 
-                        "event"
-                    ], 
-                    [
-                        "timestamp", 
-                        "event"
-                    ]
-                ], 
-                "status": "NEW, IN_PROCESS, DELIVERED, PURGED", 
-                "id": "tracking number", 
+                "id": "tracking number",
                 "title": "..."
+                "tracked_via": "BOXOH|LASERSHIP|[OTHER?]",
+                "events": [
+                    [ "timstamp", "event" ],
+                    [ "timestamp", "event" ]
+                ],
+                "status": "NEW|IN_TRANSIT|DELIVERED|HALTED",
             }
         ]
     }
