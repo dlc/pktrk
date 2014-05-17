@@ -1,0 +1,248 @@
+#!/usr/bin/perl -w
+
+use strict;
+use vars qw($ME $VERSION %OPTS %ACTIONS);
+
+$ME = basename($0);
+$VERSION = "0.01";
+
+use Data::Dumper;
+use File::Basename qw(basename);
+use Getopt::Long qw(GetOptions);
+use JSON;
+use Text::Abbrev qw(abbrev);
+
+use constant STATUS_NEW         => "NEW";       # Just added
+use constant STATUS_IN_PROCESS  => "NEW";       # Being track
+use constant STATUS_DELIVERED   => "DELIVERED"; # Delivered
+use constant STATUS_HALTED      => "HALTED";    # Purged
+
+my ($action, $id, %opts) = parse_command(@ARGV);
+
+my $packages = get_datastore($opts{'datastore'});
+print Dumper($action, $id, \%opts, $packages);
+#exit;
+
+my $sub = $ACTIONS{ $action } || $ACTIONS{ 'help' };
+
+$sub->($id, %opts);
+
+# ----------------------------------------------------------------------
+# Subroutines
+# ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+# parse_command(@ARGV)
+# ----------------------------------------------------------------------
+sub parse_command {
+    my @argv = @_;
+    my %actions = abbrev keys %ACTIONS;
+    my $actions_re = join '|', keys %actions;
+    my ($action, $id, %opts);
+
+    GetOptions(
+        'all|A!'        => \my $A,
+        'title|t=s'     => \my $t,
+        'outfile|o=s'   => \my $o,
+        'datastore|D=s' => \my $D,
+    );
+
+    %opts = (
+        all         => $A,
+        title       => $t,
+        outfile     => $o,
+        datastore   => ($D || $ENV{'PKTPK_DATASTORE'} || glob("~/.$ME.json")),
+    );
+
+    while (@argv) {
+        my $arg = shift @argv;
+
+        if ($arg =~ /^($actions_re)$/) {
+            $action = $actions{ "$1" };
+        }
+        else {
+            $id = $arg;
+        }
+    }
+
+    return ($action, $id, %opts);
+}
+
+# ----------------------------------------------------------------------
+# Datastore manipulation
+# ----------------------------------------------------------------------
+# get_datastore()
+#
+# Returns an array of package data.
+# ----------------------------------------------------------------------
+sub get_datastore {
+    my $dspath = shift;
+    my $ds;
+
+    if (open my $fh, $dspath) {
+        local $/;
+        my $data = <$fh>;
+        $ds = decode_json($data);
+    }
+
+    elsif (! -f $dspath) {
+        # New datastore
+        $ds = { packages => [ ] };
+        save_datastore($dspath, $ds->{'packages'});
+    }
+
+    else {
+        die "Can't open data store $dspath\n";
+    }
+
+    return $ds->{'packages'};
+}
+
+# ----------------------------------------------------------------------
+# save_datastore(\@packages)
+#
+# Saves an array of packages.
+# ----------------------------------------------------------------------
+sub save_datastore {
+    my $dspath = shift;
+    my $ds = shift;
+
+    if (open my $fh, ">", "$dspath.tmp") {
+        print $fh to_json({ packages => $ds }, { pretty => 1 }) . "\n";
+        close $fh;
+        rename "$dspath.tmp" => $dspath;
+
+        return 1;
+    }
+
+    die "Can't save data to $dspath\n";
+}
+
+# ----------------------------------------------------------------------
+# Commands
+# ----------------------------------------------------------------------
+sub _help {
+    my ($id, %opts) = @_;
+
+}
+
+# ----------------------------------------------------------------------
+# _track($id, %opts)
+#
+# Add an item to the data store.  Options: -t TITLE title of the
+# package
+# ----------------------------------------------------------------------
+sub _track {
+    my ($id, %opts) = @_;
+    my $packages = get_datastore($opts{'datastore'});
+
+    # Ensure package is not already tracked
+    for my $pkg (@$packages) {
+        if ($pkg->{'id'} eq $id) {
+            print "Pakcage $id already in database\n";
+            return;
+        }
+    }
+
+    push @$packages, {
+        id          => $id,
+        title       => (delete $opts{'title'} || $id),
+        events      => [],
+        status      => STATUS_NEW,
+        tracked_via => "",
+        meta        => {},
+    };
+
+    save_datastore($opts{'datastore'}, $packages);
+}
+
+# ----------------------------------------------------------------------
+# _untrack($id, %opts)
+#
+# Remove an item from the data store
+# ----------------------------------------------------------------------
+sub _untrack {
+    my ($id, %opts) = @_;
+    my $packages = get_datastore($opts{'datastore'});
+
+    save_datastore($opts{'datastore'}, $packages);
+}
+
+# ----------------------------------------------------------------------
+# _edit($id, %opts)
+#
+# Edit the metadata of an item (title only, for now)
+# ----------------------------------------------------------------------
+sub _edit {
+    my ($id, %opts) = @_;
+    my $packages = get_datastore($opts{'datastore'});
+
+    save_datastore($opts{'datastore'}, $packages);
+}
+
+# ----------------------------------------------------------------------
+# _list($id, %opts)
+#
+# Prints a list of packages  Options: -A emit all, otherwise only
+# emit active packages
+# ----------------------------------------------------------------------
+sub _list {
+    my ($id, %opts) = @_;
+    my $packages = get_datastore($opts{'datastore'});
+
+    for my $pkg (@$packages) {
+        if ($pkg->{'title'} ne $pkg->{'id'}) {
+            printf "%s / %s (%s)\n",
+                $pkg->{'title'}, $pkg->{'id'}, $pkg->{'tracked_via'};
+        }
+        else {
+            printf "%s (%s)\n",
+                $pkg->{'id'}, $pkg->{'tracked_via'};
+        }
+    }
+
+    save_datastore($opts{'datastore'}, $packages);
+}
+
+# ----------------------------------------------------------------------
+# _update()
+# 
+# Refetches updates for every package not in the DELIVERED or HALTED
+# state.
+# ----------------------------------------------------------------------
+sub _update {
+    my ($id, %opts) = @_;
+    my $packages = get_datastore($opts{'datastore'});
+
+    save_datastore($opts{'datastore'}, $packages);
+}
+
+# ----------------------------------------------------------------------
+# _genfeed($id, %opts)
+#
+# Generate an RSS feed.  Options: -o OUTFILE, otherwise writes to STDOUT.
+# ----------------------------------------------------------------------
+sub _genfeed {
+    my ($id, %opts) = @_;
+    my $packages = get_datastore($opts{'datastore'});
+
+    save_datastore($opts{'datastore'}, $packages);
+}
+
+BEGIN {
+    %ACTIONS = (
+        'help'      => \&_help,
+        'track'     => \&_track,
+        'add'       => \&_track,
+        'untrack'   => \&_untrack,
+        'remove'    => \&_untrack,
+        'delete'    => \&_untrack,
+        'edit'      => \&_edit,
+        'list'      => \&_list,
+        'update'    => \&_update,
+        'genfeed'   => \&_genfeed,
+    );
+
+}
+
+__END__
