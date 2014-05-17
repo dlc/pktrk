@@ -8,21 +8,24 @@ $VERSION = "0.01";
 
 use Data::Dumper;
 use File::Basename qw(basename);
-use Getopt::Long qw(GetOptions);
+use Getopt::Long qw(GetOptionsFromArray);
 use JSON;
 use Text::Abbrev qw(abbrev);
 
-use constant STATUS_NEW         => "NEW";       # Just added
-use constant STATUS_IN_PROCESS  => "NEW";       # Being track
-use constant STATUS_DELIVERED   => "DELIVERED"; # Delivered
-use constant STATUS_HALTED      => "HALTED";    # Purged
+# Tracking states
+use constant STATUS_NEW         => "NEW";
+use constant STATUS_IN_TRANSIT  => "IN TRANSIT";
+use constant STATUS_DELIVERED   => "DELIVERED";
+use constant STATUS_HALTED      => "HALTED";
 
+# Provider of tracking info
+use constant TRACKED_VIA_BOXOH      => "BOXOH";
+use constant TRACKED_VIA_LASERSHIP  => "LASERSHIP";
+
+# Figure out what to do
 my ($action, $id, %opts) = parse_command(@ARGV);
 
-my $packages = get_datastore($opts{'datastore'});
-print Dumper($action, $id, \%opts, $packages);
-#exit;
-
+# Perform the action
 my $sub = $ACTIONS{ $action } || $ACTIONS{ 'help' };
 
 $sub->($id, %opts);
@@ -38,9 +41,10 @@ sub parse_command {
     my @argv = @_;
     my %actions = abbrev keys %ACTIONS;
     my $actions_re = join '|', keys %actions;
-    my ($action, $id, %opts);
+    my $action = "help";
+    my ($id, %opts);
 
-    GetOptions(
+    GetOptionsFromArray(\@argv,
         'all|A!'        => \my $A,
         'title|t=s'     => \my $t,
         'outfile|o=s'   => \my $o,
@@ -51,7 +55,7 @@ sub parse_command {
         all         => $A,
         title       => $t,
         outfile     => $o,
-        datastore   => ($D || $ENV{'PKTPK_DATASTORE'} || glob("~/.$ME.json")),
+        datastore   => ($D || $ENV{'PKTRK_DATASTORE'} || glob("~/.$ME.json")),
     );
 
     while (@argv) {
@@ -123,7 +127,24 @@ sub save_datastore {
 # ----------------------------------------------------------------------
 sub _help {
     my ($id, %opts) = @_;
+    print <<HELP;
+$ME - Track packages from teh command line, like a boss
 
+
+Version $VERSION
+HELP
+}
+
+# ----------------------------------------------------------------------
+# Dump data etc
+# ----------------------------------------------------------------------
+sub _dump {
+    my ($id, %opts) = @_;
+
+    my $packages = get_datastore($opts{'datastore'});
+    print "\$id = $id\n";
+    print Data::Dumper->Dump([\%opts], ['opts']);
+    print Data::Dumper->Dump([$packages], ['packages']);
 }
 
 # ----------------------------------------------------------------------
@@ -231,16 +252,17 @@ sub _genfeed {
 
 BEGIN {
     %ACTIONS = (
-        'help'      => \&_help,
-        'track'     => \&_track,
         'add'       => \&_track,
-        'untrack'   => \&_untrack,
-        'remove'    => \&_untrack,
         'delete'    => \&_untrack,
+        'dump'      => \&_dump,
         'edit'      => \&_edit,
-        'list'      => \&_list,
-        'update'    => \&_update,
         'genfeed'   => \&_genfeed,
+        'help'      => \&_help,
+        'list'      => \&_list,
+        'remove'    => \&_untrack,
+        'track'     => \&_track,
+        'untrack'   => \&_untrack,
+        'update'    => \&_update,
     );
 
 }
