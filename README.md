@@ -39,23 +39,25 @@ changes, reserializes the structure to json in an END block.
 
 Schema looks something like this:
 
-{ "packages": [
-        { "title": "...",
-          "id": "The identifier being tracked",
-          "tracked_via": "One of: boxoh, lasership, others",
-          "events": [
-            [ timestamp, "one entry per event" ],
-            [ timestamp, "these might need to be more complex than just strings" ]
-            [ timestamp, "etc" ],
-          ],
-          "status": "Either PENDING, which means it hasn't been found yet and
-                     should be retried; IN_PROCESS, which means use the latest
-                     event as the status; DELIVERED, which means delivered but
-                     still in the list; or PURGED, which means it's been deleted
-                     from the list (but still exists in the datastore)",
-          "meta": { catchall hash of random attributes },
-        },
-   ]
-}
+    {
+        "packages": [
+            {
+                "tracked_via": "One of boxoh, lasership, others", 
+                "events": [
+                    [
+                        "timstamp", 
+                        "event"
+                    ], 
+                    [
+                        "timestamp", 
+                        "event"
+                    ]
+                ], 
+                "status": "NEW, IN_PROCESS, DELIVERED, PURGED", 
+                "id": "tracking number", 
+                "title": "..."
+            }
+        ]
+    }
 
 This would be read/written by Perl's JSON module.
