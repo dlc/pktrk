@@ -17,15 +17,15 @@ Interface
 
 subcommands:
 
-    * help emits detailed usage info
-    * track adds a package to the datastore.  If -t TITLE is
-      indicated, use TITLE as the description in the datastore.
-    * untrack removes a package. Should only be used for mistakes
-    * edit changes metadata for a package
-    * list lists outstanding packages, or all if -A is indicated
-    * update attempts to update info on every outstanding and
-      pending package
-    * genfeed generates an RSS feed of packages
+* help emits detailed usage info
+* track adds a package to the datastore.  If -t TITLE is
+  indicated, use TITLE as the description in the datastore.
+* untrack removes a package. Should only be used for mistakes
+* edit changes metadata for a package
+* list lists outstanding packages, or all if -A is indicated
+* update attempts to update info on every outstanding and
+  pending package
+* genfeed generates an RSS feed of packages
 
 If you try to add a package and it doesn't work, pktrk retries
 on every call to update.
