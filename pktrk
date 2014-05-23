@@ -318,6 +318,26 @@ sub cmd_genfeed {
 }
 
 # ----------------------------------------------------------------------
+# cmd_history($id, %opts)
+#
+# Emits history for $id.
+# ----------------------------------------------------------------------
+sub cmd_history {
+    my ($id, %opts) = @_;
+    my $packages = get_datastore($opts{'datastore'});
+
+    for my $pkg (@$packages) {
+        if ($pkg->{'id'} eq $id) {
+            for my $e (@{ $pkg->{'events'} }) {
+                print "Next event: $e\n";
+            }
+        }
+    }
+
+    # No save
+}
+
+# ----------------------------------------------------------------------
 # cmd_version($id, %opts)
 # ----------------------------------------------------------------------
 sub cmd_version {
@@ -350,25 +370,28 @@ Commands:
         package from the db, just from the display.  These can still
         be listed with the list -A command.
 
-    dump
-        Dump parsed info and the db.  For testing and debugging.
+    list [-A]
+        List tracked packages and their states.  Without -A, this
+        only lists packages that have not yet been delivered.
 
     edit / rename -t TITLE ID
         Edit an existing tracked package to set the TITLE.  The special
         token %x indicates the current title, for a shortcut.
 
-    genfeed [-o FILENAME]
-        Emits an RSS feed of the tracked packages to FILENAME,
-        or STDOUT.
-
-    list [-A]
-        List tracked packages and their states.  Without -A, this
-        only lists packages that have not yet been delivered.
+    info / events / history ID
+        Emits tracking history for a particular ID.
 
     update
         Asks $ME to contact the tracking services and update the
         internal database with state information for each undelivered
         package.
+
+    genfeed [-o FILENAME]
+        Emits an RSS feed of the tracked packages to FILENAME,
+        or STDOUT.
+
+    dump
+        Dump parsed info and the db.  For testing and debugging.
 
     help
         This help.
@@ -385,8 +408,11 @@ BEGIN {
         'delete'    => \&cmd_untrack,
         'dump'      => \&cmd_dump,
         'edit'      => \&cmd_edit,
+        'events'    => \&cmd_history,
         'genfeed'   => \&cmd_genfeed,
         'help'      => \&cmd_help,
+        'history'   => \&cmd_history,
+        'info'      => \&cmd_history,
         'list'      => \&cmd_list,
         'remove'    => \&cmd_untrack,
         'track'     => \&cmd_track,
