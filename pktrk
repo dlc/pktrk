@@ -1,22 +1,25 @@
 #!/usr/bin/perl -w
 
 use strict;
-use vars qw($ME $VERSION %OPTS %ACTIONS);
+use vars qw($ME $VERSION %OPTS %ACTIONS %TRACKERS);
 
 $ME = basename($0);
 $VERSION = "0.01";
 
 use Data::Dumper;
+use Digest;
 use File::Basename qw(basename);
 use Getopt::Long qw(GetOptionsFromArray);
 use JSON;
 use Text::Abbrev qw(abbrev);
+use XML::RSS;
 
 # Tracking states
 use constant STATUS_NEW         => "NEW";
 use constant STATUS_IN_TRANSIT  => "IN TRANSIT";
 use constant STATUS_DELIVERED   => "DELIVERED";
 use constant STATUS_HALTED      => "HALTED";
+use constant STATUS_UNTRACKED   => "UNTRACKED";
 
 # Provider of tracking info
 use constant TRACKED_VIA_BOXOH      => "BOXOH";
@@ -46,9 +49,11 @@ sub parse_command {
 
     GetOptionsFromArray(\@argv,
         'all|A!'        => \my $A,
-        'title|t=s'     => \my $t,
-        'outfile|o=s'   => \my $o,
         'datastore|D=s' => \my $D,
+        'version|V!'    => \my $V,
+        'help|h!'       => \my $h,
+        'outfile|o=s'   => \my $o,
+        'title|t=s'     => \my $t,
     );
 
     %opts = (
@@ -61,12 +66,27 @@ sub parse_command {
     while (@argv) {
         my $arg = shift @argv;
 
-        if ($arg =~ /^($actions_re)$/) {
-            $action = $actions{ "$1" };
+        if ($arg =~ /^($actions_re)$/i) {
+            $action = $actions{ lc "$1" };
         }
         else {
-            $id = $arg;
+            $id .= $arg;
         }
+    }
+
+    # Normalize package ID
+    if ($id) {
+        $id =~ s/ //g;
+        $id = uc $id;
+    }
+
+    # Overrides
+    if ($h) {
+        $action = "help";
+    }
+
+    if ($V) {
+        $action = "version";
     }
 
     return ($action, $id, %opts);
@@ -114,7 +134,12 @@ sub save_datastore {
     if (open my $fh, ">", "$dspath.tmp") {
         print $fh to_json({ packages => $ds }, { pretty => 1 }) . "\n";
         close $fh;
-        rename "$dspath.tmp" => $dspath;
+
+        my $new_md5 = digest_file("$dspath.tmp");
+        my $old_md5 = digest_file($dspath);
+
+        rename "$dspath.tmp" => $dspath
+            unless $new_md5 eq $old_md5;
 
         return 1;
     }
@@ -123,23 +148,41 @@ sub save_datastore {
 }
 
 # ----------------------------------------------------------------------
-# Commands
+# digest_file($fname)
+#
+# Returns the checksum of a file.  This is to avoid overwriting an
+# existing file if the contents haven't changed.
 # ----------------------------------------------------------------------
-sub _help {
-    my ($id, %opts) = @_;
-    print <<HELP;
-$ME - Track packages from teh command line, like a boss
+sub digest_file {
+    my $fname = shift;
 
-
-Version $VERSION
-HELP
+    if (open my $fh, $fname) {
+        my $ctx = Digest->new("SHA-1");
+        $ctx->addfile($fh);
+        return $ctx->hexdigest;
+    }
 }
+
+# ----------------------------------------------------------------------
+# tracked_via($name)
+#
+# Pretty print tracking service name
+# ----------------------------------------------------------------------
+sub tracked_via {
+    my $tracker = shift;
+    return $TRACKERS{ $tracker } || $tracker;
+}
+
+# ======================================================================
+# Commands
+# ======================================================================
 
 # ----------------------------------------------------------------------
 # Dump data etc
 # ----------------------------------------------------------------------
-sub _dump {
+sub cmd_dump {
     my ($id, %opts) = @_;
+    $id ||= "undef";
 
     my $packages = get_datastore($opts{'datastore'});
     print "\$id = $id\n";
@@ -148,19 +191,19 @@ sub _dump {
 }
 
 # ----------------------------------------------------------------------
-# _track($id, %opts)
+# cmd_track($id, %opts)
 #
 # Add an item to the data store.  Options: -t TITLE title of the
 # package
 # ----------------------------------------------------------------------
-sub _track {
+sub cmd_track {
     my ($id, %opts) = @_;
     my $packages = get_datastore($opts{'datastore'});
 
     # Ensure package is not already tracked
     for my $pkg (@$packages) {
         if ($pkg->{'id'} eq $id) {
-            print "Pakcage $id already in database\n";
+            print "Package $id already exists in database\n";
             return;
         }
     }
@@ -171,54 +214,24 @@ sub _track {
         events      => [],
         status      => STATUS_NEW,
         tracked_via => "",
-        meta        => {},
     };
 
     save_datastore($opts{'datastore'}, $packages);
 }
 
 # ----------------------------------------------------------------------
-# _untrack($id, %opts)
+# cmd_untrack($id, %opts)
 #
 # Remove an item from the data store
 # ----------------------------------------------------------------------
-sub _untrack {
-    my ($id, %opts) = @_;
-    my $packages = get_datastore($opts{'datastore'});
-
-    save_datastore($opts{'datastore'}, $packages);
-}
-
-# ----------------------------------------------------------------------
-# _edit($id, %opts)
-#
-# Edit the metadata of an item (title only, for now)
-# ----------------------------------------------------------------------
-sub _edit {
-    my ($id, %opts) = @_;
-    my $packages = get_datastore($opts{'datastore'});
-
-    save_datastore($opts{'datastore'}, $packages);
-}
-
-# ----------------------------------------------------------------------
-# _list($id, %opts)
-#
-# Prints a list of packages  Options: -A emit all, otherwise only
-# emit active packages
-# ----------------------------------------------------------------------
-sub _list {
+sub cmd_untrack {
     my ($id, %opts) = @_;
     my $packages = get_datastore($opts{'datastore'});
 
     for my $pkg (@$packages) {
-        if ($pkg->{'title'} ne $pkg->{'id'}) {
-            printf "%s / %s (%s)\n",
-                $pkg->{'title'}, $pkg->{'id'}, $pkg->{'tracked_via'};
-        }
-        else {
-            printf "%s (%s)\n",
-                $pkg->{'id'}, $pkg->{'tracked_via'};
+        if ($pkg->{'id'} eq $id) {
+            print "No longer tracking package $id\n";
+            $pkg->{'status'} = STATUS_UNTRACKED;
         }
     }
 
@@ -226,12 +239,52 @@ sub _list {
 }
 
 # ----------------------------------------------------------------------
-# _update()
+# cmd_edit($id, %opts)
+#
+# Edit the metadata of an item (title only, for now)
+# ----------------------------------------------------------------------
+sub cmd_edit {
+    my ($id, %opts) = @_;
+    my $packages = get_datastore($opts{'datastore'});
+
+    save_datastore($opts{'datastore'}, $packages);
+}
+
+# ----------------------------------------------------------------------
+# cmd_list($id, %opts)
+#
+# Prints a list of packages  Options: -A emit all, otherwise only
+# emit active packages
+# ----------------------------------------------------------------------
+sub cmd_list {
+    my ($id, %opts) = @_;
+    my $packages = get_datastore($opts{'datastore'});
+
+    for my $pkg (@$packages) {
+        if ($opts{'all'} || $pkg->{'status'} eq STATUS_IN_TRANSIT) {
+            my $tracker = tracked_via($pkg->{'tracked_via'});
+
+            if ($pkg->{'title'} ne $pkg->{'id'}) {
+                printf "%s / %s (%s)\n",
+                    $pkg->{'title'}, $pkg->{'id'}, $tracker;
+            }
+            else {
+                printf "%s (%s)\n",
+                    $pkg->{'id'}, $tracker;
+            }
+        }
+    }
+
+    # No save
+}
+
+# ----------------------------------------------------------------------
+# cmd_update()
 # 
 # Refetches updates for every package not in the DELIVERED or HALTED
 # state.
 # ----------------------------------------------------------------------
-sub _update {
+sub cmd_update {
     my ($id, %opts) = @_;
     my $packages = get_datastore($opts{'datastore'});
 
@@ -239,30 +292,98 @@ sub _update {
 }
 
 # ----------------------------------------------------------------------
-# _genfeed($id, %opts)
+# cmd_genfeed($id, %opts)
 #
 # Generate an RSS feed.  Options: -o OUTFILE, otherwise writes to STDOUT.
 # ----------------------------------------------------------------------
-sub _genfeed {
+sub cmd_genfeed {
     my ($id, %opts) = @_;
     my $packages = get_datastore($opts{'datastore'});
 
     save_datastore($opts{'datastore'}, $packages);
+}
+
+# ----------------------------------------------------------------------
+# cmd_version($id, %opts)
+# ----------------------------------------------------------------------
+sub cmd_version {
+    print "$ME v$VERSION\n";
+}
+
+# ----------------------------------------------------------------------
+# cmd_help($id, %opts)
+#
+# Emit help information
+# ----------------------------------------------------------------------
+sub cmd_help {
+    my ($id, %opts) = @_;
+    print <<HELP;
+$ME - Track packages from the command line, like a boss
+
+Usage:
+
+    \$ $ME COMMAND ID [options]
+
+Commands:
+
+    add / track ID [-t TITLE]
+        Add a package to be tracked.  TITLE is optional, and, if
+        provided, is used as the visual identifier (the ID is used
+        by default).
+
+    delete / remove / untrack ID
+        Stop tracking a package.  This doesn't actually remove the
+        package from the db, just from the display.  These can still
+        be listed with the list -A command.
+
+    dump
+        Dump parsed info and the db.  For testing and debugging.
+
+    edit / rename -t TITLE ID
+        Edit an existing tracked package to set the TITLE.
+
+    genfeed [-o FILENAME]
+        Emits an RSS feed of the tracked packages to FILENAME,
+        or STDOUT.
+
+    list [-A]
+        List tracked packages and their states.  Without -A, this
+        only lists packages that have not yet been delivered.
+
+    update
+        Asks $ME to contact the tracking services and update the
+        internal database with state information for each undelivered
+        package.
+
+    help
+        This help.
+
+    version
+        Print "$ME v$VERSION" and exit.
+
+HELP
 }
 
 BEGIN {
     %ACTIONS = (
-        'add'       => \&_track,
-        'delete'    => \&_untrack,
-        'dump'      => \&_dump,
-        'edit'      => \&_edit,
-        'genfeed'   => \&_genfeed,
-        'help'      => \&_help,
-        'list'      => \&_list,
-        'remove'    => \&_untrack,
-        'track'     => \&_track,
-        'untrack'   => \&_untrack,
-        'update'    => \&_update,
+        'add'       => \&cmd_track,
+        'delete'    => \&cmd_untrack,
+        'dump'      => \&cmd_dump,
+        'edit'      => \&cmd_edit,
+        'genfeed'   => \&cmd_genfeed,
+        'help'      => \&cmd_help,
+        'list'      => \&cmd_list,
+        'remove'    => \&cmd_untrack,
+        'track'     => \&cmd_track,
+        'untrack'   => \&cmd_untrack,
+        'update'    => \&cmd_update,
+        'version'   => \&cmd_version,
+    );
+
+    # These provide name mappings for pretty printing
+    %TRACKERS = (
+        "@{[TRACKED_VIA_BOXOH]}"     => "Boxoh",
+        "@{[TRACKED_VIA_LASERSHIP]}" => "LaserShip",
     );
 
 }
