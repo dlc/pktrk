@@ -335,6 +335,8 @@ sub cmd_history {
     my ($id, %opts) = @_;
     my $packages = get_datastore($opts{'datastore'});
 
+    return unless $id;
+
     for my $pkg (@$packages) {
         if ($pkg->{'id'} eq $id) {
             for my $e (@{ $pkg->{'events'} }) {
