@@ -170,6 +170,41 @@ sub digest_file {
 }
 
 # ----------------------------------------------------------------------
+# get($uri)
+#
+# Get a representation of a URL, and return it as (\%head, $body).
+# Follows redirects.
+# ----------------------------------------------------------------------
+sub get {
+    my ($data, $body, $head, %head);
+
+    if (my $uri = shift) {
+        $data = `curl -sSik --connect-timeout 10 "$uri"`;
+        $data =~ s/\r//g;   # Normalize carriage returns
+        ($head, $body) = split /\n\n/, $data, 2;
+
+        %head = map {
+            my ($k, $v);
+            if (/^HTTP\//) {
+                $k = "status";
+                $v = $_;
+            }
+            else {
+                ($k, $v) = split /:\s*/, $_, 2;
+            }
+
+            (lc($k) => $v);
+        } split /\n/, $head;
+    }
+
+    if ($head{'status'} =~ / 30. / && $head{'location'}) {
+        return get($head{'location'});
+    }
+
+    return (\%head, $body);
+}
+
+# ----------------------------------------------------------------------
 # tracked_via($name)
 #
 # Pretty print tracking service name
