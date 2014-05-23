@@ -47,7 +47,7 @@ sub parse_command {
     my @argv = @_;
     my %cmds = abbrev keys %ACTIONS;
     my $cmds_re = join '|', keys %cmds;
-    my $cmd = "help";
+    my $cmd = "nothing";
     my ($id, %opts);
 
     GetOptionsFromArray(\@argv,
@@ -93,7 +93,7 @@ sub parse_command {
     }
 
     # Find the subroutine
-    my $action = $ACTIONS{ $cmd } || $ACTIONS{ 'help' };
+    my $action = $ACTIONS{ $cmd } || $ACTIONS{ 'nothing' };
 
     return ($action, $id, %opts);
 }
@@ -194,6 +194,19 @@ sub cmd_dump {
     print "\$id = $id\n";
     print Data::Dumper->Dump([\%opts], ['opts']);
     print Data::Dumper->Dump([$packages], ['packages']);
+}
+
+# ----------------------------------------------------------------------
+# cmd_nothing($id, %opts)
+#
+# Called when nothing is indicated on the command line.  Intended to be
+# the default
+# ----------------------------------------------------------------------
+sub cmd_nothing {
+    my ($id, %opts) = @_;
+
+    print "$ME v$VERSION - Command line package tracking.\n";
+    print "Run \`$ME help\` for details\n";
 }
 
 # ----------------------------------------------------------------------
@@ -428,6 +441,7 @@ BEGIN {
         'history'   => \&cmd_history,
         'info'      => \&cmd_history,
         'list'      => \&cmd_list,
+        'nothing'   => \&cmd_nothing,
         'remove'    => \&cmd_untrack,
         'track'     => \&cmd_track,
         'untrack'   => \&cmd_untrack,
