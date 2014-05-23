@@ -247,6 +247,20 @@ sub cmd_edit {
     my ($id, %opts) = @_;
     my $packages = get_datastore($opts{'datastore'});
 
+    return unless $opts{'title'};
+
+    for my $pkg (@$packages) {
+        if ($pkg->{'id'} eq $id) {
+
+            # Special character %x indicates current title
+            my $cur_title = $pkg->{'title'};
+            $opts{'title'} =~ s/%x/$cur_title/g;
+
+            $pkg->{'title'} = $opts{'title'};
+            print "Set title for $pkg->{'id'} to '$opts{'title'}'\n";
+        }
+    }
+
     save_datastore($opts{'datastore'}, $packages);
 }
 
