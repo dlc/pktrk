@@ -354,7 +354,8 @@ Commands:
         Dump parsed info and the db.  For testing and debugging.
 
     edit / rename -t TITLE ID
-        Edit an existing tracked package to set the TITLE.
+        Edit an existing tracked package to set the TITLE.  The special
+        token %x indicates the current title, for a shortcut.
 
     genfeed [-o FILENAME]
         Emits an RSS feed of the tracked packages to FILENAME,
