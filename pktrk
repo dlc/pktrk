@@ -11,6 +11,7 @@ use Digest;
 use File::Basename qw(basename);
 use Getopt::Long qw(GetOptionsFromArray);
 use JSON;
+use POSIX qw(strftime);
 use Text::Abbrev qw(abbrev);
 use XML::RSS;
 
@@ -25,6 +26,8 @@ use constant STATUS_UNTRACKED   => "UNTRACKED";
 use constant TRACKED_VIA_BOXOH      => "BOXOH";
 use constant TRACKED_VIA_LASERSHIP  => "LASERSHIP";
 
+use constant EVENT_TS_FORMAT    => "%Y-%m-%d %H:%M";
+
 # Figure out what to do
 my ($action, $id, %opts) = parse_command(@ARGV);
 
@@ -32,6 +35,8 @@ my ($action, $id, %opts) = parse_command(@ARGV);
 my $sub = $ACTIONS{ $action } || $ACTIONS{ 'help' };
 
 $sub->($id, %opts);
+
+exit 0;
 
 # ----------------------------------------------------------------------
 # Subroutines
@@ -320,7 +325,10 @@ sub cmd_genfeed {
 # ----------------------------------------------------------------------
 # cmd_history($id, %opts)
 #
-# Emits history for $id.
+# Emits history for $id. Format is:
+# [2014-05-22 08:44] Event 1
+# [2014-05-23 12:05] Event 2
+# [2014-05-24 11:16] Event 3
 # ----------------------------------------------------------------------
 sub cmd_history {
     my ($id, %opts) = @_;
@@ -329,7 +337,10 @@ sub cmd_history {
     for my $pkg (@$packages) {
         if ($pkg->{'id'} eq $id) {
             for my $e (@{ $pkg->{'events'} }) {
-                print "Next event: $e\n";
+                my ($ts, $text) = @$e;
+                printf "[%s] %s\n",
+                    strftime(EVENT_TS_FORMAT, localtime $ts),
+                    $text;
             }
         }
     }
