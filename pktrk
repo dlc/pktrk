@@ -320,7 +320,7 @@ sub cmd_genfeed {
     my ($id, %opts) = @_;
     my $packages = get_datastore($opts{'datastore'});
 
-    save_datastore($opts{'datastore'}, $packages);
+    # No save
 }
 
 # ----------------------------------------------------------------------
