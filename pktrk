@@ -32,9 +32,7 @@ use constant EVENT_TS_FORMAT    => "%Y-%m-%d %H:%M";
 my ($action, $id, %opts) = parse_command(@ARGV);
 
 # Perform the action
-my $sub = $ACTIONS{ $action } || $ACTIONS{ 'help' };
-
-$sub->($id, %opts);
+$action->($id, %opts);
 
 exit 0;
 
@@ -47,9 +45,9 @@ exit 0;
 # ----------------------------------------------------------------------
 sub parse_command {
     my @argv = @_;
-    my %actions = abbrev keys %ACTIONS;
-    my $actions_re = join '|', keys %actions;
-    my $action = "help";
+    my %cmds = abbrev keys %ACTIONS;
+    my $cmds_re = join '|', keys %cmds;
+    my $cmd = "help";
     my ($id, %opts);
 
     GetOptionsFromArray(\@argv,
@@ -71,8 +69,8 @@ sub parse_command {
     while (@argv) {
         my $arg = shift @argv;
 
-        if ($arg =~ /^($actions_re)$/i) {
-            $action = $actions{ lc "$1" };
+        if ($arg =~ /^($cmds_re)$/i) {
+            $cmd = $cmds{ lc "$1" };
         }
         else {
             $id .= $arg;
@@ -87,12 +85,15 @@ sub parse_command {
 
     # Overrides
     if ($h) {
-        $action = "help";
+        $cmd = "help";
     }
 
     if ($V) {
-        $action = "version";
+        $cmd = "version";
     }
+
+    # Find the subroutine
+    my $action = $ACTIONS{ $cmd } || $ACTIONS{ 'help' };
 
     return ($action, $id, %opts);
 }
