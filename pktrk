@@ -255,6 +255,28 @@ sub track_via_boxoh {
 }
 
 # ----------------------------------------------------------------------
+# format_item($id)
+#
+# Returns formatted package info
+# ----------------------------------------------------------------------
+sub format_item {
+    my $pkg = shift;
+    my $tracker = tracked_via($pkg->{'tracked_via'});
+    my $ret;
+
+    if ($pkg->{'title'} ne $pkg->{'id'}) {
+        $ret = sprintf "%s / %s (%s)\n",
+            $pkg->{'title'}, $pkg->{'id'}, $tracker->{'name'};
+    }
+    else {
+        $ret = sprintf "%s (%s)\n",
+            $pkg->{'id'}, $tracker->{'name'};
+    }
+
+    return $ret;
+}
+
+# ----------------------------------------------------------------------
 # determine_tracker($id)
 #
 # Tries to determine which tracker to use, by first attempting to 
@@ -403,16 +425,7 @@ sub cmd_list {
 
     for my $pkg (@$packages) {
         if ($opts{'all'} || $pkg->{'status'} eq STATUS_IN_TRANSIT) {
-            my $tracker = tracked_via($pkg->{'tracked_via'});
-
-            if ($pkg->{'title'} ne $pkg->{'id'}) {
-                printf "%s / %s (%s)\n",
-                    $pkg->{'title'}, $pkg->{'id'}, $tracker->{'name'};
-            }
-            else {
-                printf "%s (%s)\n",
-                    $pkg->{'id'}, $tracker->{'name'};
-            }
+            print format_item($pkg);
         }
     }
 
@@ -433,18 +446,18 @@ sub cmd_update {
         my $st = $pkg->{'status'};
         next unless (($st eq STATUS_IN_TRANSIT) || ($st eq STATUS_NEW));
 
+        my $id = $pkg->{'id'};
         if ($st eq STATUS_NEW) {
             if (my $tr = determine_tracker($id)) {
                 $pkg->{'tracked_via'} = $tr;
+                $pkg->{'status'} = STATUS_IN_TRANSIT;
             }
             else {
                 next;
             }
         }
 
-        my $id = $pkg->{'id'};
-        my $tracker = tracked_via($id);
-        my $tsub = $tracker->{'track'};
+        my $tsub = $TRACKERS{ $pkg->{'tracked_via'} }->{'track'};
         my $pdata = $tsub->($id);
 
         # Replace events array, because this should always contain all events
@@ -482,6 +495,7 @@ sub cmd_history {
 
     for my $pkg (@$packages) {
         if ($pkg->{'id'} eq $id) {
+            print format_item($pkg);
             for my $e (@{ $pkg->{'events'} }) {
                 my ($ts, $text) = @$e;
                 printf "[%s] %s\n",
