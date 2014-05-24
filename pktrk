@@ -239,8 +239,38 @@ sub track_via_lasership {
     }
 
     return {
+        error => ($data->{'Error'} || ""),
         events => \@ret,
     };
+}
+
+sub track_via_boxoh {
+    my $id = shift;
+    my @ret;
+
+    return {
+        error => "unimplemented",
+        events => \@ret,
+    }
+}
+
+# ----------------------------------------------------------------------
+# determine_tracker($id)
+#
+# Tries to determine which tracker to use, by first attempting to 
+# get the information from lasership, then falling back to boxoh.
+# ----------------------------------------------------------------------
+sub determine_tracker {
+    my $id = shift;
+    my $tr;
+
+    $tr = track_via_lasership($id);
+    return TRACKED_VIA_LASERSHIP unless $tr->{'error'};
+
+    $tr = track_via_boxoh($id);
+    return TRACKED_VIA_BOXOH unless $tr->{'error'};
+
+    return;
 }
 
 # ----------------------------------------------------------------------
@@ -401,7 +431,16 @@ sub cmd_update {
 
     for my $pkg (@$packages) {
         my $st = $pkg->{'status'};
-        next unless (($t eq STATUS_IN_TRANSIT) || ($st eq STATUS_NEW));
+        next unless (($st eq STATUS_IN_TRANSIT) || ($st eq STATUS_NEW));
+
+        if ($st eq STATUS_NEW) {
+            if (my $tr = determine_tracker($id)) {
+                $pkg->{'tracked_via'} = $tr;
+            }
+            else {
+                next;
+            }
+        }
 
         my $id = $pkg->{'id'};
         my $tracker = tracked_via($id);
@@ -551,11 +590,6 @@ BEGIN {
             name => "LaserShip",
             track => \&track_via_lasership,
         },
-
-        default => {
-            name => "<unknown>",
-            track => sub { die "Can't find tracker!\n" },
-        }
     );
 
 }
