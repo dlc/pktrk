@@ -408,7 +408,8 @@ sub cmd_update {
         my $tsub = $tracker->{'track'};
         my $pdata = $tsub->($id);
 
-
+        # Replace events array, because this should always contain all events
+        $pkg->{'events'} = $pdata->{'events'};
     }
 
     save_datastore($opts{'datastore'}, $packages);
