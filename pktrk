@@ -212,11 +212,14 @@ sub get {
 # ----------------------------------------------------------------------
 sub tracked_via {
     my $tracker = shift;
-    return $TRACKERS{ $tracker } || $tracker;
+    return $TRACKERS{ $tracker } || $TRACKERS{ 'default' };
 }
 
 # ----------------------------------------------------------------------
-# 
+# track_via_XXX($id)
+#
+# These commands pull the data from the remote source and return a 
+# consistent, normalized set of data to the caller.
 # ----------------------------------------------------------------------
 sub track_via_lasership {
     my $id = shift;
@@ -225,6 +228,7 @@ sub track_via_lasership {
     my $body = get($uri)
     my $data = decode_json($body);
 
+    
 }
 
 # ----------------------------------------------------------------------
@@ -359,11 +363,11 @@ sub cmd_list {
 
             if ($pkg->{'title'} ne $pkg->{'id'}) {
                 printf "%s / %s (%s)\n",
-                    $pkg->{'title'}, $pkg->{'id'}, $tracker;
+                    $pkg->{'title'}, $pkg->{'id'}, $tracker->{'name'};
             }
             else {
                 printf "%s (%s)\n",
-                    $pkg->{'id'}, $tracker;
+                    $pkg->{'id'}, $tracker->{'name'};
             }
         }
     }
@@ -380,6 +384,18 @@ sub cmd_list {
 sub cmd_update {
     my ($id, %opts) = @_;
     my $packages = get_datastore($opts{'datastore'});
+
+    for my $pkg (@$packages) {
+        next unless (($pkg->{'status'} eq STATUS_IN_TRANSIT) ||
+                     ($pkg->{'status'} eq STATUS_NEW));
+
+        my $id = $pkg->{'id'};
+        my $tracker = tracked_via($id);
+        my $tsub = $tracker->{'track'};
+        my $pdata = $tsub->($id);
+
+
+    }
 
     save_datastore($opts{'datastore'}, $packages);
 }
@@ -511,8 +527,20 @@ BEGIN {
 
     # These provide name mappings for pretty printing
     %TRACKERS = (
-        "@{[TRACKED_VIA_BOXOH]}"     => "Boxoh",
-        "@{[TRACKED_VIA_LASERSHIP]}" => "LaserShip",
+        "@{[TRACKED_VIA_BOXOH]}"     => {
+            name => "Boxoh",
+            track => \&track_via_boxoh,
+        },
+
+        "@{[TRACKED_VIA_LASERSHIP]}" => {
+            name => "LaserShip",
+            track => \&track_via_lasership,
+        },
+
+        default => {
+            name => "<unknown>",
+            track => sub { die "Can't find tracker!\n" },
+        }
     );
 
 }
