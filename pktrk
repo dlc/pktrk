@@ -400,8 +400,8 @@ sub cmd_update {
     my $packages = get_datastore($opts{'datastore'});
 
     for my $pkg (@$packages) {
-        next unless (($pkg->{'status'} eq STATUS_IN_TRANSIT) ||
-                     ($pkg->{'status'} eq STATUS_NEW));
+        my $st = $pkg->{'status'};
+        next unless (($t eq STATUS_IN_TRANSIT) || ($st eq STATUS_NEW));
 
         my $id = $pkg->{'id'};
         my $tracker = tracked_via($id);
