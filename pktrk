@@ -238,7 +238,9 @@ sub track_via_lasership {
         push @ret, [ $d => $t ];
     }
 
-    return \@ret;
+    return {
+        events => \@ret,
+    };
 }
 
 # ----------------------------------------------------------------------
