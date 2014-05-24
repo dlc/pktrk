@@ -168,6 +168,8 @@ sub digest_file {
         $ctx->addfile($fh);
         return $ctx->hexdigest;
     }
+
+    return "";
 }
 
 # ----------------------------------------------------------------------
