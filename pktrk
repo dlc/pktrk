@@ -172,8 +172,8 @@ sub digest_file {
 # ----------------------------------------------------------------------
 # get($uri)
 #
-# Get a representation of a URL, and return it as (\%head, $body).
-# Follows redirects.
+# Get a representation of a URL, and return it as (\%head, $body) in
+# list context, or just $body in scalar context. Follows redirects.
 # ----------------------------------------------------------------------
 sub get {
     my ($data, $body, $head, %head);
@@ -201,7 +201,8 @@ sub get {
         return get($head{'location'});
     }
 
-    return (\%head, $body);
+    return (\%head, $body) if wantarray;
+    return $body;
 }
 
 # ----------------------------------------------------------------------
@@ -212,6 +213,30 @@ sub get {
 sub tracked_via {
     my $tracker = shift;
     return $TRACKERS{ $tracker } || $tracker;
+}
+
+# ----------------------------------------------------------------------
+# 
+# ----------------------------------------------------------------------
+sub track_via_lasership {
+    my $id = shift;
+    my $uri = lasership_uri($id);
+
+    my $body = get($uri)
+    my $data = decode_json($body);
+
+}
+
+# ----------------------------------------------------------------------
+# lasership_uri($id[, $format])
+#
+# Helper method to generate a lasership URI.  Example ID LE14989937
+# ----------------------------------------------------------------------
+sub lasership_uri {
+    my $id = shift;
+    my $format = shift || 'json';
+
+    return "http://lasership.com/track/$id/$format";
 }
 
 # ======================================================================
