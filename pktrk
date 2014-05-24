@@ -13,6 +13,7 @@ use Getopt::Long qw(GetOptionsFromArray);
 use JSON;
 use POSIX qw(strftime);
 use Text::Abbrev qw(abbrev);
+use Time::ParseDate qw(parsedate);
 use XML::RSS;
 
 # Tracking states
@@ -224,11 +225,20 @@ sub tracked_via {
 sub track_via_lasership {
     my $id = shift;
     my $uri = lasership_uri($id);
+    my @ret;
 
-    my $body = get($uri)
+    my $body = get($uri);
     my $data = decode_json($body);
+    my $events = $data->{'Events'};
 
-    
+    for my $e (@$events) {
+        my $d = parsedate($e->{'DateTime'});
+        my $t = $e->{'EventShortText'};
+
+        push @ret, [ $d => $t ];
+    }
+
+    return \@ret;
 }
 
 # ----------------------------------------------------------------------
@@ -292,11 +302,13 @@ sub cmd_track {
     }
 
     push @$packages, {
-        id          => $id,
-        title       => (delete $opts{'title'} || $id),
-        events      => [],
-        status      => STATUS_NEW,
-        tracked_via => "",
+        id           => $id,
+        title        => (delete $opts{'title'} || $id),
+        events       => [],
+        status       => STATUS_NEW,
+        tracked_via  => "",
+        added_on     => time,
+        delivered_on => undef,
     };
 
     save_datastore($opts{'datastore'}, $packages);
