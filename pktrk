@@ -496,7 +496,7 @@ sub cmd_history {
     return unless $id;
 
     for my $pkg (@$packages) {
-        if ($pkg->{'id'} eq $id) {
+        if ($pkg->{'id'} =~ /^$id/o) {
             print format_item($pkg);
             for my $e (@{ $pkg->{'events'} }) {
                 my ($ts, $text) = @$e;
@@ -552,7 +552,9 @@ Commands:
         token %x indicates the current title, for a shortcut.
 
     info / events / history ID
-        Emits tracking history for a particular ID.
+        Emits tracking history for a particular ID.  For this command,
+        you can specify a partial ID and $ME will do its best to
+        figure out which one you mean.
 
     update
         Asks $ME to contact the tracking services and update the
