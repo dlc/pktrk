@@ -264,15 +264,16 @@ sub track_via_boxoh {
 sub format_item {
     my $pkg = shift;
     my $tracker = tracked_via($pkg->{'tracked_via'});
+   (my $st = lc $pkg->{'status'}) =~ s/(^|\s)(.)/$1\U$2/g;
     my $ret;
 
     if ($pkg->{'title'} ne $pkg->{'id'}) {
-        $ret = sprintf "%s / %s (%s)\n",
-            $pkg->{'title'}, $pkg->{'id'}, $tracker->{'name'};
+        $ret = sprintf "%s / %s (%s) - %s\n",
+            $pkg->{'title'}, $pkg->{'id'}, $tracker->{'name'}, $st;
     }
     else {
-        $ret = sprintf "%s (%s)\n",
-            $pkg->{'id'}, $tracker->{'name'};
+        $ret = sprintf "%s (%s) - %s\n",
+            $pkg->{'id'}, $tracker->{'name'}, $st;
     }
 
     return $ret;
@@ -464,6 +465,11 @@ sub cmd_update {
 
         # Replace events array, because this should always contain all events
         $pkg->{'events'} = $pdata->{'events'};
+
+        # If the item is marked as delivered, update the status
+        if (grep { /delivered/i } map { $_->[1] } @{ $pkg->{'events'} }) {
+            $pkg->{'status'} = STATUS_DELIVERED;
+        }
     }
 
     save_datastore($opts{'datastore'}, $packages);
