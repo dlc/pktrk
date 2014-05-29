@@ -249,13 +249,31 @@ sub track_via_lasership {
 sub track_via_boxoh {
     my $id = shift;
     my $uri = boxoh_uri($id);
+    my $err = "";
     my @ret;
 
     my $body = get($uri);
-    
+    my $rss = XML::RSS->new;
+
+    eval { $rss->parse($body); };
+
+    if ($@) {
+        $err = "$@";
+        $err =~ s/^\s*\n//;
+        $err =~ s/\s*\n*$//;
+    }
+    else {
+        for my $e (@{ $rss->{'items'} }) {
+            my $date = parsedate $e->{'pubDate'};
+            my $title = $e->{'title'};
+            $title =~ s/^.+?[ap]m: *//;
+
+            push @ret, [ $date => $title ];
+        }
+    }
 
     return {
-        error => "unimplemented",
+        error => $err,
         events => \@ret,
     }
 }
