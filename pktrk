@@ -248,7 +248,11 @@ sub track_via_lasership {
 
 sub track_via_boxoh {
     my $id = shift;
+    my $uri = boxoh_uri($id);
     my @ret;
+
+    my $body = get($uri);
+    
 
     return {
         error => "unimplemented",
@@ -308,6 +312,17 @@ sub lasership_uri {
     my $format = shift || 'json';
 
     return "http://lasership.com/track/$id/$format";
+}
+
+# ----------------------------------------------------------------------
+# boxoh_uri($id[, $format])
+#
+# Helper method to generate a boxoh URI.  Example ID 1ZA7810W0385627907
+# ----------------------------------------------------------------------
+sub boxoh_uri {
+    my $id = shift;
+
+    return "http://www.boxoh.com/?t=$id&rss=1"
 }
 
 # ======================================================================
