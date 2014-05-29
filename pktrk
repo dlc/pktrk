@@ -614,6 +614,11 @@ BEGIN {
             name => "LaserShip",
             track => \&track_via_lasership,
         },
+
+        "default" => {
+            name => "Untracked",
+            track => sub { },
+        }
     );
 
 }
