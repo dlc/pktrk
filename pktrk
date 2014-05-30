@@ -545,8 +545,14 @@ sub cmd_history {
 
     return unless $id;
 
+    my $c = 0;
     for my $pkg (@$packages) {
         if ($pkg->{'id'} =~ /^$id/o) {
+            if ($c > 0) {
+                print "-- \n";
+            }
+            $c++;
+
             print format_item($pkg);
             for my $e (@{ $pkg->{'events'} }) {
                 my ($ts, $text) = @$e;
