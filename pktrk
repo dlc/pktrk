@@ -266,9 +266,20 @@ sub track_via_boxoh {
         for my $e (@{ $rss->{'items'} }) {
             my $date = parsedate $e->{'pubDate'};
             my $title = $e->{'title'};
-            $title =~ s/^.+?[ap]m: *//;
+            my $event;
 
-            push @ret, [ $date => $title ];
+            if ($title =~ /error/i) {
+               $event = $title;
+            }
+            else {
+                my @desc = split m!<br/>!, $e->{'description'};
+               (my $what = $desc[1]) =~ s!</?b>!!g;
+               (my $loc = $desc[2]) =~ s/[\r\n]//g;
+
+                $event = "$what ($loc)";
+            }
+
+            push @ret, [ $date => $event ];
         }
     }
 
