@@ -548,6 +548,9 @@ sub cmd_history {
     my $c = 0;
     for my $pkg (@$packages) {
         if ($pkg->{'id'} =~ /^$id/o) {
+            my $st = $pkg->{'status'};
+            next unless ($opts{'all'} || ($st eq STATUS_IN_TRANSIT) || ($st eq STATUS_NEW));
+
             if ($c > 0) {
                 print "-- \n";
             }
