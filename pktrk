@@ -269,7 +269,7 @@ sub track_via_boxoh {
             my $event;
 
             if ($title =~ /error/i) {
-               $event = $title;
+               $err = $event = $title;
             }
             else {
                 my @desc = split m!<br/>!, $e->{'description'};
