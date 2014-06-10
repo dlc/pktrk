@@ -274,13 +274,15 @@ sub track_via_boxoh {
             else {
                 my @desc = split m!<br/>!, $e->{'description'};
                (my $what = $desc[1]) =~ s!</?b>!!g;
-               (my $loc = $desc[2]) =~ s/[\r\n]//g;
+               (my $loc = ($desc[2] || "")) =~ s/[\r\n]//g;
 
-                $event = "$what ($loc)";
+                $event = "$what" . ($loc ? " ($loc)" : "");
             }
 
             push @ret, [ $date => $event ];
         }
+
+        @ret = sort { $a->[0] <=> $b->[0] } @ret;
     }
 
     return {
